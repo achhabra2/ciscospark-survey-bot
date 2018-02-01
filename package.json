@@ -4,7 +4,7 @@
   "description": "Bot for taking surveys",
   "main": "lib/index.js",
   "engines": {
-    "node": "8.1.4"
+    "node": ">=8.1.4"
   },
   "scripts": {
     "prod": "node lib/index.js",
@@ -28,6 +28,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "async-retry": "^1.1.4",
     "babel-cli": "^6.18.0",
     "babel-core": "^6.22.1",
     "babel-eslint": "^7.2.3",
@@ -40,6 +41,7 @@
     "bower": "^1.8.0",
     "caminte": "^0.4.0",
     "cookie-session": "^2.0.0-beta.2",
+    "delay": "^2.0.0",
     "express-async-router": "^0.1.12",
     "gulp": "^3.9.0",
     "gulp-autoprefixer": "^3.1.0",

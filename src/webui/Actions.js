@@ -3,6 +3,8 @@ import { promisifyAll } from 'bluebird'
 import redisUrl from 'redis-url'
 import uuid from 'uuid/v4'
 import map from 'lodash/map'
+import delay from 'delay'
+import retry from 'async-retry'
 
 import renderChart from './renderChart'
 import shareResultsFn from './shareResults'
@@ -59,6 +61,7 @@ for (const model of models) {
 import DummySparkUser from './DummySparkUser'
 import SparkUser from './SparkUser'
 import SparkBot from './SparkBot'
+import { setTimeout } from 'timers'
 
 export default class {
   constructor ({ user, controller, bot, io }) {
@@ -157,20 +160,31 @@ export default class {
     const survey = await this.updateSurvey(id, { state: 'active' })
     const roomMembers = await this._roomMembersForSurvey(survey)
 
-    await Promise.all(roomMembers.map(async sparkUser => {
-      const surveyTaker = await this.createSurveyTaker(sparkUser, survey.id)
-      const { personEmail } = sparkUser
-      const room = await this.sparkBot.conductUserSurvey(
-        personEmail,
-        survey,
-        this.userDisplayName,
-        (...args) => this.saveSurveyResponse(...args, survey.token, surveyTaker.id),
-        () => this.saveSurveyCompletion(surveyTaker.id, survey.id)
-      )
-      await this.updateSurveyTaker(surveyTaker.id, { roomId: room.id })
-    }))
+    for (const member in roomMembers) {
+      await delay(500)
+      try {
+        await retry(async bail => {
+          await this.sendAndSaveSurvey(survey, member)
+        }, {retries: 2})
+      } catch (error) {
+        console.error(`Survey for ${member.personEmail} could not be completed after 3 tries.`)
+      }
+    }
 
     return survey
+  }
+
+  async sendAndSaveSurvey (survey, sparkUser) {
+    const surveyTaker = await this.createSurveyTaker(sparkUser, survey.id)
+    const { personEmail } = sparkUser
+    const room = await this.sparkBot.conductUserSurvey(
+      personEmail,
+      survey,
+      this.userDisplayName,
+      (...args) => this.saveSurveyResponse(...args, survey.token, surveyTaker.id),
+      () => this.saveSurveyCompletion(surveyTaker.id, survey.id)
+    )
+    await this.updateSurveyTaker(surveyTaker.id, { roomId: room.id })
   }
 
   listRooms = () => this.sparkUser.listRooms()

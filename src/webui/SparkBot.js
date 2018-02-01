@@ -1,3 +1,5 @@
+import retry from 'async-retry'
+
 export default class {
   constructor (controller, bot) {
     this.controller = controller
@@ -5,14 +7,18 @@ export default class {
   }
 
   async conductUserSurvey (personEmail, survey, surveyorName, recordAnswer, recordCompletion) {
-    const roomForSurvey = await this.controller.api.rooms.create({
-      title: survey.data.title
-    })
+    const roomForSurvey = await retry(async bail => {
+      this.controller.api.rooms.create({
+        title: survey.data.title
+      })
+    }, {retries: 2})
 
-    await this.controller.api.memberships.create({
-      roomId: roomForSurvey.id,
-      personEmail
-    })
+    await retry(async bail => {
+      this.controller.api.memberships.create({
+        roomId: roomForSurvey.id,
+        personEmail
+      })
+    }, {retries: 2})
 
     this.controller.trigger('conduct_survey', [this.bot, {
       roomForSurvey,
