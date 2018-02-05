@@ -8,13 +8,13 @@ export default class {
 
   async conductUserSurvey (personEmail, survey, surveyorName, recordAnswer, recordCompletion) {
     const roomForSurvey = await retry(async bail => {
-      this.controller.api.rooms.create({
+      return this.controller.api.rooms.create({
         title: survey.data.title
       })
     }, {retries: 2})
 
     await retry(async bail => {
-      this.controller.api.memberships.create({
+      return this.controller.api.memberships.create({
         roomId: roomForSurvey.id,
         personEmail
       })

@@ -61,7 +61,6 @@ for (const model of models) {
 import DummySparkUser from './DummySparkUser'
 import SparkUser from './SparkUser'
 import SparkBot from './SparkBot'
-import { setTimeout } from 'timers'
 
 export default class {
   constructor ({ user, controller, bot, io }) {
@@ -161,7 +160,7 @@ export default class {
     const roomMembers = await this._roomMembersForSurvey(survey)
 
     for (const member in roomMembers) {
-      await delay(500)
+      await delay(250)
       try {
         await retry(async bail => {
           await this.sendAndSaveSurvey(survey, member)
