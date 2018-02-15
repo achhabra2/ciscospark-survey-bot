@@ -63,7 +63,7 @@ import SparkUser from './SparkUser'
 import SparkBot from './SparkBot'
 
 export default class {
-  constructor ({ user, controller, bot, io }) {
+  constructor({ user, controller, bot, io }) {
     this.userId = user.profile.id
     this.userDisplayName = user.profile.displayName
 
@@ -80,7 +80,7 @@ export default class {
     this.io = io
   }
 
-  listSurveys = () => Survey.allAsync({where: { userSparkId: this.userId }})
+  listSurveys = () => Survey.allAsync({ where: { userSparkId: this.userId } })
 
   createSurvey = data => Survey.createAsync({ userSparkId: this.userId, data })
 
@@ -93,9 +93,9 @@ export default class {
   getSurveyTakers = surveyId =>
     SurveyTaker.allAsync({ where: { surveyId } })
 
-  getSurvey = id => Survey.findOneAsync({where: { userSparkId: this.userId, id }})
+  getSurvey = id => Survey.findOneAsync({ where: { userSparkId: this.userId, id } })
 
-  async getSurveyTakersAndResponses (id) {
+  async getSurveyTakersAndResponses(id) {
     const surveyTakers = await SurveyTaker.allAsync({ where: { surveyId: id } })
 
     const surveyResponses = await SurveyResponse.allAsync({
@@ -105,7 +105,7 @@ export default class {
     return { surveyTakers, surveyResponses }
   }
 
-  async getSurveyAndAllResponses (id) {
+  async getSurveyAndAllResponses(id) {
     const [survey, { surveyTakers, surveyResponses }] = await Promise.all([
       this.getSurvey(id),
       this.getSurveyTakersAndResponses(id)
@@ -114,7 +114,7 @@ export default class {
     return { survey, surveyTakers, surveyResponses }
   }
 
-  emitSurveyUpdated (surveyToken) {
+  emitSurveyUpdated(surveyToken) {
     this.io.to(surveyToken).emit('survey updated')
   }
 
@@ -132,12 +132,12 @@ export default class {
     }
   }
 
-  async updateSurvey (id, attributes) {
+  async updateSurvey(id, attributes) {
     await Survey.updateAsync({ userSparkId: this.userId, id }, attributes)
     return await this.getSurvey(id)
   }
 
-  async deleteSurvey (id) {
+  async deleteSurvey(id) {
     const { survey, surveyTakers, surveyResponses } = await this.getSurveyAndAllResponses(id)
     await Promise.all([
       Survey.removeAsync({ where: { id: survey.id } }),
@@ -149,22 +149,25 @@ export default class {
   _roomMembersForSurvey = async survey =>
     survey.data.whoType === 'space'
       ? await this.listRoomMembers(survey.data.room.id)
-      : survey.data.emailAddresses.map(({name, address}) => ({
+      : survey.data.emailAddresses.map(({ name, address }) => ({
         id: address,
         personEmail: address,
         personDisplayName: name || address
       }))
 
-  async conductSurvey (id) {
+  async conductSurvey(id) {
     const survey = await this.updateSurvey(id, { state: 'active' })
     const roomMembers = await this._roomMembersForSurvey(survey)
-
-    for (const member in roomMembers) {
+    console.log('Conducting survey...')
+    for (const member of roomMembers) {
+      console.log(`Surveying: ${member}`)
       await delay(250)
+      console.log(`Delayed 250 ms...`)
       try {
         await retry(async bail => {
-          await this.sendAndSaveSurvey(survey, member)
-        }, {retries: 2})
+          // console.log(`Calling send and save survey ${JSON.stringify(survey)} ${JSON.stringify(member)}.`)
+          return this.sendAndSaveSurvey(survey, member)
+        }, { retries: 2 })
       } catch (error) {
         console.error(`Survey for ${member.personEmail} could not be completed after 3 tries.`)
       }
@@ -173,7 +176,7 @@ export default class {
     return survey
   }
 
-  async sendAndSaveSurvey (survey, sparkUser) {
+  async sendAndSaveSurvey(survey, sparkUser) {
     const surveyTaker = await this.createSurveyTaker(sparkUser, survey.id)
     const { personEmail } = sparkUser
     const room = await this.sparkBot.conductUserSurvey(
@@ -190,7 +193,7 @@ export default class {
 
   listRoomMembers = roomId => this.sparkUser.listRoomMembers(roomId)
 
-  async shareResults (surveyAsJSON, roomId) {
+  async shareResults(surveyAsJSON, roomId) {
     const messages = await shareResultsFn({
       surveyAsJSON,
       renderChartForResponses: renderChart
@@ -198,7 +201,7 @@ export default class {
     await this.sparkUser.postMessages(messages, roomId)
   }
 
-  async copySurvey (id) {
+  async copySurvey(id) {
     if (id) {
       const survey = await this.getSurvey(id)
       survey.id = undefined
@@ -206,12 +209,12 @@ export default class {
     }
   }
 
-  async endSurvey (id) {
+  async endSurvey(id) {
     const survey = await this.updateSurvey(id, { state: 'complete' })
 
     const surveyTakers = await this.getSurveyTakers(id)
 
-    await Promise.all(surveyTakers.map(({roomId}) =>
+    await Promise.all(surveyTakers.map(({ roomId }) =>
       this.sparkBot.closeSurveyRoom(roomId)
     ))
 
