@@ -2,18 +2,21 @@
   "name": "Survey Bot for Cicso Spark",
   "description": "Cisco Spark bot for for conducting surveys",
   "repository": "https://github.com/promptworks/ciscospark-survey-bot",
-  "addons": ["heroku-redis"],
+  "addons": ["heroku-postgresql"],
   "env": {
     "PUBLIC_ADDRESS": {
-      "description": "The address at which your bot can be reached. The public address of your Heroku app will be 'https://<App Name>.herokuapp.com",
+      "description":
+        "The address at which your bot can be reached. The public address of your Heroku app will be 'https://<App Name>.herokuapp.com",
       "required": true
     },
     "ACCESS_TOKEN": {
-      "description": "The bot's access token from Cisco Spark. Create a new bot account at https://developer.ciscospark.com/add-bot.html if you do not have one.",
+      "description":
+        "The bot's access token from Cisco Spark. Create a new bot account at https://developer.ciscospark.com/add-bot.html if you do not have one.",
       "required": true
     },
     "SPARK_SECRET": {
-      "description": "A secret for validating that incoming webhooks originate from Cisco Spark.",
+      "description":
+        "A secret for validating that incoming webhooks originate from Cisco Spark.",
       "required": true,
       "generator": "secret"
     },
@@ -26,10 +29,19 @@
       "required": true
     },
     "RESTRICT_LOGINS_TO_DOMAINS": {
-      "description": "Restrict access to this service to a single or multiple email domains. Domains can be comma seperated E.g. example.com,example.net,email.example.biz",
+      "description":
+        "Restrict access to this service to a single or multiple email domains. Domains can be comma seperated E.g. example.com,example.net,email.example.biz",
       "required": false
     }
   },
   "logo": "https://node-js-sample.herokuapp.com/node.svg",
-  "keywords": ["spark", "cisco", "ciscospark", "bot", "botkit", "survey", "poll"]
+  "keywords": [
+    "spark",
+    "cisco",
+    "ciscospark",
+    "bot",
+    "botkit",
+    "survey",
+    "poll"
+  ]
 }

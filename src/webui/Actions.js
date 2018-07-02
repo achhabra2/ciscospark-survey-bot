@@ -1,6 +1,6 @@
 import { Schema } from 'caminte'
 import { promisifyAll } from 'bluebird'
-import redisUrl from 'redis-url'
+// import redisUrl from 'redis-url'
 import uuid from 'uuid/v4'
 import map from 'lodash/map'
 import delay from 'delay'
@@ -10,20 +10,49 @@ import renderChart from './renderChart'
 import shareResultsFn from './shareResults'
 import { allowDevLogin } from '../env'
 
-const redisOptions = () => {
-  const {
-    port,
-    hostname: host,
-    password
-  } = redisUrl.parse(process.env.REDIS_URL)
+// const redisOptions = () => {
+//   const {
+//     port,
+//     hostname: host,
+//     password
+//   } = redisUrl.parse(process.env.REDIS_URL)
 
-  return {
-    port,
-    host,
-    password
-  }
+//   return {
+//     port,
+//     host,
+//     password
+//   }
+// }
+// const schema = new Schema('redis', redisOptions())
+
+let db_user = process.env.db_user
+let db_pass = process.env.db_pass
+let db_host = process.env.db_host
+let db_port = process.env.db_port
+let db_db = process.env.db_db
+
+if (process.env.DATABASE_URL) {
+  // Heroku configuration, override the other db vars
+  let match = process.env.DATABASE_URL.match(
+    /postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/i
+  )
+  db_user = match[1]
+  db_pass = match[2]
+  db_host = match[3]
+  db_port = match[4]
+  db_db = match[5]
 }
-const schema = new Schema('redis', redisOptions())
+
+const config = {
+  driver: 'postgres',
+  host: db_host,
+  port: db_port,
+  username: db_user,
+  password: db_pass,
+  database: 'survey'
+}
+
+const schema = new Schema(config.driver, config)
 
 const Survey = schema.define('Survey', {
   userSparkId: { type: schema.String, index: true },
@@ -63,7 +92,7 @@ import SparkUser from './SparkUser'
 import SparkBot from './SparkBot'
 
 export default class {
-  constructor({ user, controller, bot, io }) {
+  constructor ({ user, controller, bot, io }) {
     this.userId = user.profile.id
     this.userDisplayName = user.profile.displayName
 
@@ -73,30 +102,32 @@ export default class {
 
     const botEmails = controller.identity
       ? controller.identity.emails
-      : (allowDevLogin && ['surveyBot@example.com'])
+      : allowDevLogin && ['surveyBot@example.com']
 
     this.sparkUser = new SparkUserClass(user, botEmails)
 
     this.io = io
   }
 
-  listSurveys = () => Survey.allAsync({ where: { userSparkId: this.userId } })
+  listSurveys = () => Survey.allAsync({ where: { userSparkId: this.userId } });
 
-  createSurvey = data => Survey.createAsync({ userSparkId: this.userId, data })
+  createSurvey = data => Survey.createAsync({ userSparkId: this.userId, data });
 
   createSurveyTaker = (userData, surveyId) =>
-    SurveyTaker.createAsync({ userSparkId: userData.id, userData, surveyId })
+    SurveyTaker.createAsync({ userSparkId: userData.id, userData, surveyId });
 
   updateSurveyTaker = (surveyTakerId, attributes) =>
-    SurveyTaker.updateAsync({ id: surveyTakerId }, attributes)
+    SurveyTaker.updateAsync({ id: surveyTakerId }, attributes);
 
-  getSurveyTakers = surveyId =>
-    SurveyTaker.allAsync({ where: { surveyId } })
+  getSurveyTakers = surveyId => SurveyTaker.allAsync({ where: { surveyId } });
 
-  getSurvey = id => Survey.findOneAsync({ where: { userSparkId: this.userId, id } })
+  getSurvey = id =>
+    Survey.findOneAsync({ where: { userSparkId: this.userId, id } });
 
-  async getSurveyTakersAndResponses(id) {
-    const surveyTakers = await SurveyTaker.allAsync({ where: { surveyId: id } })
+  async getSurveyTakersAndResponses (id) {
+    const surveyTakers = await SurveyTaker.allAsync({
+      where: { surveyId: id }
+    })
 
     const surveyResponses = await SurveyResponse.allAsync({
       where: { surveyTakerId: { in: map(surveyTakers, 'id') } }
@@ -105,7 +136,7 @@ export default class {
     return { surveyTakers, surveyResponses }
   }
 
-  async getSurveyAndAllResponses(id) {
+  async getSurveyAndAllResponses (id) {
     const [survey, { surveyTakers, surveyResponses }] = await Promise.all([
       this.getSurvey(id),
       this.getSurveyTakersAndResponses(id)
@@ -114,31 +145,46 @@ export default class {
     return { survey, surveyTakers, surveyResponses }
   }
 
-  emitSurveyUpdated(surveyToken) {
+  emitSurveyUpdated (surveyToken) {
     this.io.to(surveyToken).emit('survey updated')
   }
 
-  saveSurveyResponse = async (questionId, response, surveyToken, surveyTakerId) => {
+  saveSurveyResponse = async (
+    questionId,
+    response,
+    surveyToken,
+    surveyTakerId
+  ) => {
     await SurveyResponse.createAsync({ questionId, response, surveyTakerId })
     this.emitSurveyUpdated(surveyToken)
-  }
+  };
 
   saveSurveyCompletion = async (surveyTakerId, surveyId) => {
-    await SurveyTaker.updateAsync({ id: surveyTakerId }, { isFinished: 'true' })
-    const unfinished = await SurveyTaker.countAsync({ surveyId, isFinished: 'false' })
+    await SurveyTaker.updateAsync(
+      { id: surveyTakerId },
+      { isFinished: 'true' }
+    )
+    const unfinished = await SurveyTaker.countAsync({
+      surveyId,
+      isFinished: 'false'
+    })
     if (unfinished === 0) {
       const survey = await this.updateSurvey(surveyId, { state: 'complete' })
       this.emitSurveyUpdated(survey.token)
     }
-  }
+  };
 
-  async updateSurvey(id, attributes) {
+  async updateSurvey (id, attributes) {
     await Survey.updateAsync({ userSparkId: this.userId, id }, attributes)
     return await this.getSurvey(id)
   }
 
-  async deleteSurvey(id) {
-    const { survey, surveyTakers, surveyResponses } = await this.getSurveyAndAllResponses(id)
+  async deleteSurvey (id) {
+    const {
+      survey,
+      surveyTakers,
+      surveyResponses
+    } = await this.getSurveyAndAllResponses(id)
     await Promise.all([
       Survey.removeAsync({ where: { id: survey.id } }),
       SurveyTaker.removeAsync({ where: { id: map(surveyTakers, 'id') } }),
@@ -153,9 +199,9 @@ export default class {
         id: address,
         personEmail: address,
         personDisplayName: name || address
-      }))
+      }));
 
-  async conductSurvey(id) {
+  async conductSurvey (id) {
     const survey = await this.updateSurvey(id, { state: 'active' })
     const roomMembers = await this._roomMembersForSurvey(survey)
     console.log('Conducting survey...')
@@ -164,36 +210,44 @@ export default class {
       await delay(250)
       console.log(`Delayed 250 ms...`)
       try {
-        await retry(async bail => {
-          // console.log(`Calling send and save survey ${JSON.stringify(survey)} ${JSON.stringify(member)}.`)
-          return this.sendAndSaveSurvey(survey, member)
-        }, { retries: 2 })
+        await retry(
+          async bail => {
+            // console.log(`Calling send and save survey ${JSON.stringify(survey)} ${JSON.stringify(member)}.`)
+            return this.sendAndSaveSurvey(survey, member)
+          },
+          { retries: 2 }
+        )
       } catch (error) {
-        console.error(`Survey for ${member.personEmail} could not be completed after 3 tries.`)
+        console.error(
+          `Survey for ${
+            member.personEmail
+          } could not be completed after 3 tries.`
+        )
       }
     }
 
     return survey
   }
 
-  async sendAndSaveSurvey(survey, sparkUser) {
+  async sendAndSaveSurvey (survey, sparkUser) {
     const surveyTaker = await this.createSurveyTaker(sparkUser, survey.id)
     const { personEmail } = sparkUser
     const room = await this.sparkBot.conductUserSurvey(
       personEmail,
       survey,
       this.userDisplayName,
-      (...args) => this.saveSurveyResponse(...args, survey.token, surveyTaker.id),
+      (...args) =>
+        this.saveSurveyResponse(...args, survey.token, surveyTaker.id),
       () => this.saveSurveyCompletion(surveyTaker.id, survey.id)
     )
     await this.updateSurveyTaker(surveyTaker.id, { roomId: room.id })
   }
 
-  listRooms = () => this.sparkUser.listRooms()
+  listRooms = () => this.sparkUser.listRooms();
 
-  listRoomMembers = roomId => this.sparkUser.listRoomMembers(roomId)
+  listRoomMembers = roomId => this.sparkUser.listRoomMembers(roomId);
 
-  async shareResults(surveyAsJSON, roomId) {
+  async shareResults (surveyAsJSON, roomId) {
     const messages = await shareResultsFn({
       surveyAsJSON,
       renderChartForResponses: renderChart
@@ -201,7 +255,7 @@ export default class {
     await this.sparkUser.postMessages(messages, roomId)
   }
 
-  async copySurvey(id) {
+  async copySurvey (id) {
     if (id) {
       const survey = await this.getSurvey(id)
       survey.id = undefined
@@ -209,14 +263,14 @@ export default class {
     }
   }
 
-  async endSurvey(id) {
+  async endSurvey (id) {
     const survey = await this.updateSurvey(id, { state: 'complete' })
 
     const surveyTakers = await this.getSurveyTakers(id)
 
-    await Promise.all(surveyTakers.map(({ roomId }) =>
-      this.sparkBot.closeSurveyRoom(roomId)
-    ))
+    await Promise.all(
+      surveyTakers.map(({ roomId }) => this.sparkBot.closeSurveyRoom(roomId))
+    )
 
     this.emitSurveyUpdated(survey.token)
   }
